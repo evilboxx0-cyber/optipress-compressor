@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OptiPress — Fast, Private Image Compressor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    html, body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    /* Custom range slider */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 8px;
+      border-radius: 999px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #4f46e5;
+      border: 2px solid #ffffff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.12);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #4f46e5;
+      border: 2px solid #ffffff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+      cursor: pointer;
+    }
+    .checkerboard {
+      background-color: #f8fafc;
+      background-image:
+        linear-gradient(45deg, #e2e8f0 25%, transparent 25%),
+        linear-gradient(-45deg, #e2e8f0 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #e2e8f0 75%),
+        linear-gradient(-45deg, transparent 75%, #e2e8f0 75%);
+      background-size: 16px 16px;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    }
+    .dark .checkerboard {
+      background-color: #0f172a;
+      background-image:
+        linear-gradient(45deg, #1e293b 25%, transparent 25%),
+        linear-gradient(-45deg, #1e293b 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #1e293b 75%),
+        linear-gradient(-45deg, transparent 75%, #1e293b 75%);
+    }
+    .compare-container {
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200 flex flex-col">
+
+  <!-- Minimal Centered Header -->
+  <header class="w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-30">
+    <div class="max-w-5xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+          <i data-lucide="minimize-2" class="w-4 h-4"></i>
+        </div>
+        <span class="font-semibold text-lg tracking-tight">OptiPress</span>
+        <span class="hidden sm:inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800/60">
+          <i data-lucide="shield-check" class="w-3 h-3"></i>
+          100% Local &amp; Private
+        </span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="themeToggle" type="button" aria-label="Toggle dark mode"
+          class="p-2 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <i data-lucide="moon" class="w-4 h-4 dark:hidden"></i>
+          <i data-lucide="sun" class="w-4 h-4 hidden dark:block"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Center-Focused Main Workspace -->
+  <main class="flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-10 sm:py-16">
+    <div class="w-full max-w-5xl mx-auto space-y-8">
+
+      <!-- Hero Title (compact when files are loaded) -->
+      <div id="heroHeader" class="text-center space-y-2 transition-all">
+        <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-white">
+          Compress images effortlessly
+        </h1>
+        <p class="text-base sm:text-lg text-slate-500 dark:text-slate-400 max-w-2xl mx-auto">
+          Shrink PNG, JPEG, and WebP files right in your browser—no uploads, no limits, instant before-and-after preview.
+        </p>
+      </div>
+
+      <!-- Centered Dropzone Card -->
+      <div id="dropzone"
+        role="button"
+        tabindex="0"
+        aria-label="Drop images here or click to select files"
+        class="group relative rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20 transition-all duration-200 p-10 sm:p-16 text-center cursor-pointer shadow-sm">
+        <input id="fileInput" type="file" accept="image/*" multiple class="hidden" />
+        <div class="flex flex-col items-center gap-3.5">
+          <div class="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center group-hover:scale-105 transition-transform">
+            <i data-lucide="image-plus" class="w-8 h-8"></i>
+          </div>
+          <div class="space-y-1">
+            <p class="text-lg sm:text-xl font-semibold text-slate-800 dark:text-slate-100">
+              Drop images here, or <span class="text-indigo-600 dark:text-indigo-400 underline decoration-indigo-300 underline-offset-4">browse files</span>
+            </p>
+            <p class="text-sm sm:text-base text-slate-500 dark:text-slate-400">
+              Supports PNG, JPEG, WebP · Paste from clipboard (<kbd class="px-1.5 py-0.5 text-[11px] font-medium bg-slate-100 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700">Ctrl+V</kbd>)
+            </p>
+          </div>
+          <div class="pt-2 flex flex-wrap items-center justify-center gap-2.5" onclick="event.stopPropagation()">
+            <button id="sampleSingleBtn" type="button"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-indigo-500"></i>
+              Try Sample Image
+            </button>
+            <button id="sampleBatchBtn" type="button"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors">
+              <i data-lucide="layers" class="w-3.5 h-3.5 text-indigo-500"></i>
+              Try Batch (3 Images)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Compression Controls Panel (Centered) -->
+      <section aria-label="Compression Settings"
+        class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm p-6 sm:p-8 space-y-5">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 items-center">
+          <!-- Quality Control -->
+          <div class="sm:col-span-1 space-y-2">
+            <div class="flex items-center justify-between">
+              <label for="qualityRange" class="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Quality
+              </label>
+              <span id="qualityValue" class="text-sm font-bold px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300">
+                80%
+              </span>
+            </div>
+            <input id="qualityRange" type="range" min="10" max="100" step="1" value="80"
+              class="w-full bg-slate-200 dark:bg-slate-700" />
+            <div class="flex items-center justify-between gap-1 pt-0.5">
+              <button type="button" data-preset="60" class="preset-btn flex-1 text-xs py-1.5 rounded-lg font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors">
+                Smallest
+              </button>
+              <button type="button" data-preset="80" class="preset-btn flex-1 text-xs py-1.5 rounded-lg font-medium bg-indigo-600 text-white transition-colors">
+                Balanced
+              </button>
+              <button type="button" data-preset="92" class="preset-btn flex-1 text-xs py-1.5 rounded-lg font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors">
+                High
+              </button>
+            </div>
+          </div>
+
+          <!-- Output Format -->
+          <div class="space-y-1.5">
+            <label for="formatSelect" class="block text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Output Format
+            </label>
+            <select id="formatSelect"
+              class="w-full h-11 px-3.5 rounded-xl text-base font-medium bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="auto">Auto (Smart Optimize)</option>
+              <option value="image/webp">WebP (Best Compression)</option>
+              <option value="image/jpeg">JPEG (Universal)</option>
+              <option value="image/png">PNG (Lossless)</option>
+            </select>
+            <p class="text-xs text-slate-400 dark:text-slate-500">
+              Auto keeps PNG/JPEG or converts large PNGs to WebP
+            </p>
+          </div>
+
+          <!-- Max Width / Resize -->
+          <div class="space-y-1.5">
+            <label for="resizeSelect" class="block text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Max Width
+            </label>
+            <select id="resizeSelect"
+              class="w-full h-11 px-3.5 rounded-xl text-base font-medium bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="0">Original Size</option>
+              <option value="2560">2560 px (2K)</option>
+              <option value="1920">1920 px (Full HD)</option>
+              <option value="1280">1280 px (Web)</option>
+              <option value="800">800 px (Compact)</option>
+              <option value="custom">Custom Width…</option>
+            </select>
+            <div id="customWidthWrap" class="hidden flex items-center gap-2 pt-1">
+              <input id="customWidthInput" type="number" min="50" max="10000" placeholder="e.g. 1024"
+                class="w-full h-8 px-2.5 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <span class="text-xs text-slate-400">px</span>
+            </div>
+            <p id="resizeHint" class="text-xs text-slate-400 dark:text-slate-500">
+              Aspect ratio is always preserved
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Temporary Uploaded Images Staging Area (Hidden until files are uploaded) -->
+      <section id="stagingSection" class="hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm p-6 sm:p-8 space-y-5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <i data-lucide="images" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Uploaded Images</h2>
+                <span id="stagingCountBadge" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300">0 ready</span>
+              </div>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Review your temporary queue, adjust settings above, then click Start.</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button id="clearPendingBtn" type="button"
+              class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/40 text-slate-600 hover:text-rose-600 dark:text-slate-300 dark:hover:text-rose-400 transition-colors">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              Clear Queue
+            </button>
+            <button id="startCompressBtn" type="button"
+              class="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
+              <span id="startBtnLabel">Start</span>
+            </button>
+          </div>
+        </div>
+        <div id="stagingList" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+      </section>
+
+      <!-- Results & Queue Section (Hidden until files are compressed) -->
+      <section id="resultsSection" class="hidden space-y-4">
+        <!-- Summary Action Bar -->
+        <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <div>
+              <span class="text-xs text-slate-500 dark:text-slate-400">Total Saved</span>
+              <div class="flex items-center gap-2">
+                <span id="totalSavingsText" class="text-base font-bold text-slate-900 dark:text-white">0 KB</span>
+                <span id="totalSavingsPct" class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300">
+                  0%
+                </span>
+              </div>
+            </div>
+            <div class="h-7 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block"></div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">
+              <span id="fileCountText">0 images</span> · <span id="sizeTransitionText">0 KB → 0 KB</span>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="addMoreBtn" type="button"
+              class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              Add More
+            </button>
+            <button id="clearAllBtn" type="button"
+              class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/40 text-slate-600 hover:text-rose-600 dark:text-slate-300 dark:hover:text-rose-400 transition-colors">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              Clear
+            </button>
+            <button id="downloadAllBtn" type="button"
+              class="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span id="downloadAllLabel">Download All (.zip)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Compressed Image Cards -->
+        <div id="fileList" class="space-y-2.5"></div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Minimal Footer -->
+  <footer class="w-full py-5 text-center text-xs text-slate-400 dark:text-slate-500">
+    All image processing runs locally in your browser using HTML5 Canvas. EXIF metadata is stripped automatically.
+  </footer>
+
+  <!-- Before / After Visual Comparison Modal -->
+  <div id="compareModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
+    <div class="w-full max-w-4xl bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <!-- Modal Header -->
+      <div class="px-4 sm:px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <h2 id="compareTitle" class="text-sm font-semibold text-slate-900 dark:text-white truncate">Compare Image</h2>
+          <p id="compareMeta" class="text-xs text-slate-500 dark:text-slate-400 truncate"></p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="compareDownloadBtn" type="button"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white transition-colors">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            Download
+          </button>
+          <button id="closeCompareBtn" type="button" aria-label="Close comparison"
+            class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Interactive Split Comparison Viewport -->
+      <div class="relative flex-1 overflow-hidden checkerboard flex items-center justify-center p-4 min-h-[300px] sm:min-h-[420px]">
+        <div id="compareStage" class="compare-container relative max-w-full max-h-[65vh] overflow-hidden rounded-lg shadow-md">
+          <!-- Compressed (Right / Background) -->
+          <img id="compareAfterImg" alt="Compressed preview" class="block max-w-full max-h-[65vh] object-contain pointer-events-none" />
+          <!-- Original (Left / Clipped) -->
+          <div id="compareBeforeWrap" class="absolute inset-0 overflow-hidden pointer-events-none" style="clip-path: inset(0 50% 0 0);">
+            <img id="compareBeforeImg" alt="Original preview" class="block w-full h-full object-contain pointer-events-none" />
+          </div>
+          <!-- Labels -->
+          <span class="absolute top-3 left-3 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-900/75 text-white backdrop-blur-sm pointer-events-none">
+            Original · <span id="compareOrigSize"></span>
+          </span>
+          <span class="absolute top-3 right-3 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-600/90 text-white backdrop-blur-sm pointer-events-none">
+            Compressed · <span id="compareCompSize"></span>
+          </span>
+          <!-- Divider Line & Handle -->
+          <div id="compareDivider" class="absolute inset-y-0 w-0.5 bg-white shadow-[0_0_8px_rgba(0,0,0,0.5)] cursor-ew-resize" style="left: 50%;">
+            <div class="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white text-slate-800 shadow-lg border border-slate-200 flex items-center justify-center">
+              <i data-lucide="chevrons-left-right" class="w-4 h-4"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer Hint -->
+      <div class="px-4 py-2.5 border-t border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400">
+        Drag the slider left or right to inspect compression quality
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-medium shadow-lg opacity-0 pointer-events-none transition-all duration-200"></div>
+
+  <script>
+    (function () {
+      // State
+      const state = {
+        items: [], // { id, name, originalFile, originalUrl, originalSize, origW, origH, compressedBlob, compressedUrl, compressedSize, compW, compH, outMime, status }
+        quality: 80,
+        format: 'auto',
+        maxWidth: 0,
+        comparingId: null,
+      };
+
+      // DOM Elements
+      const dropzone = document.getElementById('dropzone');
+      const fileInput = document.getElementById('fileInput');
+      const heroHeader = document.getElementById('heroHeader');
+      const qualityRange = document.getElementById('qualityRange');
+      const qualityValue = document.getElementById('qualityValue');
+      const formatSelect = document.getElementById('formatSelect');
+      const resizeSelect = document.getElementById('resizeSelect');
+      const customWidthWrap = document.getElementById('customWidthWrap');
+      const customWidthInput = document.getElementById('customWidthInput');
+      const resizeHint = document.getElementById('resizeHint');
+      const stagingSection = document.getElementById('stagingSection');
+      const stagingCountBadge = document.getElementById('stagingCountBadge');
+      const stagingList = document.getElementById('stagingList');
+      const clearPendingBtn = document.getElementById('clearPendingBtn');
+      const startCompressBtn = document.getElementById('startCompressBtn');
+      const startBtnLabel = document.getElementById('startBtnLabel');
+      const resultsSection = document.getElementById('resultsSection');
+      const fileList = document.getElementById('fileList');
+      const totalSavingsText = document.getElementById('totalSavingsText');
+      const totalSavingsPct = document.getElementById('totalSavingsPct');
+      const fileCountText = document.getElementById('fileCountText');
+      const sizeTransitionText = document.getElementById('sizeTransitionText');
+      const addMoreBtn = document.getElementById('addMoreBtn');
+      const clearAllBtn = document.getElementById('clearAllBtn');
+      const downloadAllBtn = document.getElementById('downloadAllBtn');
+      const downloadAllLabel = document.getElementById('downloadAllLabel');
+      const sampleSingleBtn = document.getElementById('sampleSingleBtn');
+      const sampleBatchBtn = document.getElementById('sampleBatchBtn');
+      const themeToggle = document.getElementById('themeToggle');
+      const toastEl = document.getElementById('toast');
+
+      // Compare Modal Elements
+      const compareModal = document.getElementById('compareModal');
+      const compareTitle = document.getElementById('compareTitle');
+      const compareMeta = document.getElementById('compareMeta');
+      const compareStage = document.getElementById('compareStage');
+      const compareBeforeImg = document.getElementById('compareBeforeImg');
+      const compareAfterImg = document.getElementById('compareAfterImg');
+      const compareBeforeWrap = document.getElementById('compareBeforeWrap');
+      const compareDivider = document.getElementById('compareDivider');
+      const compareOrigSize = document.getElementById('compareOrigSize');
+      const compareCompSize = document.getElementById('compareCompSize');
+      const compareDownloadBtn = document.getElementById('compareDownloadBtn');
+      const closeCompareBtn = document.getElementById('closeCompareBtn');
+
+      // Theme Init (dark mode default)
+      function initTheme() {
+        try {
+          const saved = localStorage.getItem('optipress-theme');
+          if (saved === 'light') {
+            document.documentElement.classList.remove('dark');
+          } else {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      }
+      initTheme();
+
+      themeToggle.addEventListener('click', () => {
+        const isDark = document.documentElement.classList.toggle('dark');
+        try {
+          localStorage.setItem('optipress-theme', isDark ? 'dark' : 'light');
+        } catch (e) {}
+      });
+
+      // Toast helper
+      let toastTimer = null;
+      function showToast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.remove('opacity-0', 'pointer-events-none');
+        toastEl.classList.add('opacity-100');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          toastEl.classList.remove('opacity-100');
+          toastEl.classList.add('opacity-0', 'pointer-events-none');
+        }, 2600);
+      }
+
+      // Format bytes cleanly
+      function formatBytes(bytes) {
+        if (!bytes || bytes <= 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(i === 0 ? 0 : 1)) + ' ' + sizes[i];
+      }
+
+      function mimeToExt(mime) {
+        if (mime === 'image/webp') return 'webp';
+        if (mime === 'image/png') return 'png';
+        return 'jpg';
+      }
+
+      function mimeToLabel(mime) {
+        if (mime === 'image/webp') return 'WEBP';
+        if (mime === 'image/png') return 'PNG';
+        return 'JPEG';
+      }
+
+      function getOutputFilename(originalName, outMime) {
+        const base = originalName.replace(/\.[^/.]+$/, '');
+        return `${base}-compressed.${mimeToExt(outMime)}`;
+      }
+
+      // Determine target MIME
+      function resolveTargetMime(fileType, fileSize) {
+        if (state.format !== 'auto') return state.format;
+        // Smart optimize: convert large PNGs (>250KB) to WebP, keep JPEG as JPEG, keep small PNG as PNG or WebP
+        if (fileType === 'image/png' && fileSize > 250 * 1024) return 'image/webp';
+        if (fileType === 'image/png') return 'image/png';
+        if (fileType === 'image/webp') return 'image/webp';
+        return 'image/jpeg';
+      }
+
+      // Core Compression Engine (HTML5 Canvas)
+      function compressImageItem(item) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            item.origW = img.naturalWidth;
+            item.origH = img.naturalHeight;
+
+            let targetW = img.naturalWidth;
+            let targetH = img.naturalHeight;
+            if (state.maxWidth > 0 && targetW > state.maxWidth) {
+              const ratio = state.maxWidth / targetW;
+              targetW = Math.round(state.maxWidth);
+              targetH = Math.max(1, Math.round(targetH * ratio));
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = targetW;
+            canvas.height = targetH;
+            const ctx = canvas.getContext('2d');
+
+            const targetMime = resolveTargetMime(item.originalFile.type, item.originalSize);
+
+            // Fill white background when converting transparent PNGs to JPEG
+            if (targetMime === 'image/jpeg') {
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(0, 0, targetW, targetH);
+            }
+
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, targetW, targetH);
+
+            const q = Math.max(0.1, Math.min(1, state.quality / 100));
+
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) {
+                  item.status = 'error';
+                  resolve(item);
+                  return;
+                }
+                if (item.compressedUrl) {
+                  URL.revokeObjectURL(item.compressedUrl);
+                }
+                item.compressedBlob = blob;
+                item.compressedUrl = URL.createObjectURL(blob);
+                item.compressedSize = blob.size;
+                item.compW = targetW;
+                item.compH = targetH;
+                item.outMime = blob.type || targetMime;
+                item.status = 'done';
+                resolve(item);
+              },
+              targetMime,
+              targetMime === 'image/png' ? undefined : q
+            );
+          };
+          img.onerror = () => {
+            item.status = 'error';
+            resolve(item);
+          };
+          img.src = item.originalUrl;
+        });
+      }
+
+      // Read image dimensions for temporary staging preview
+      function loadImageDimensions(item) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            item.origW = img.naturalWidth;
+            item.origH = img.naturalHeight;
+            resolve();
+          };
+          img.onerror = () => resolve();
+          img.src = item.originalUrl;
+        });
+      }
+
+      // Add files to temporary uploaded queue (wait for Start button)
+      async function handleFiles(files) {
+        const imageFiles = Array.from(files).filter((f) => f.type.startsWith('image/'));
+        if (imageFiles.length === 0) {
+          showToast('Please select valid image files (PNG, JPEG, WebP).');
+          return;
+        }
+
+        const newItems = imageFiles.map((file) => ({
+          id: 'img_' + Math.random().toString(36).slice(2, 10),
+          name: file.name || 'pasted-image.png',
+          originalFile: file,
+          originalUrl: URL.createObjectURL(file),
+          originalSize: file.size,
+          origW: 0,
+          origH: 0,
+          compressedBlob: null,
+          compressedUrl: null,
+          compressedSize: 0,
+          compW: 0,
+          compH: 0,
+          outMime: file.type || 'image/jpeg',
+          status: 'pending',
+        }));
+
+        state.items.push(...newItems);
+        render();
+        await Promise.all(newItems.map((it) => loadImageDimensions(it)));
+        render();
+        showToast(`Added ${newItems.length} image${newItems.length > 1 ? 's' : ''} — click Start to compress`);
+      }
+
+      // Start compressing all pending uploaded images
+      async function startCompression() {
+        const pendingItems = state.items.filter((it) => it.status === 'pending');
+        if (pendingItems.length === 0) return;
+
+        pendingItems.forEach((it) => (it.status = 'processing'));
+        render();
+        await Promise.all(pendingItems.map((it) => compressImageItem(it)));
+        render();
+        showToast(`Compressed ${pendingItems.length} image${pendingItems.length > 1 ? 's' : ''}`);
+      }
+
+      startCompressBtn.addEventListener('click', startCompression);
+
+      clearPendingBtn.addEventListener('click', () => {
+        state.items = state.items.filter((it) => {
+          if (it.status === 'pending') {
+            if (it.originalUrl) URL.revokeObjectURL(it.originalUrl);
+            if (it.compressedUrl) URL.revokeObjectURL(it.compressedUrl);
+            return false;
+          }
+          return true;
+        });
+        render();
+        showToast('Cleared uploaded queue');
+      });
+
+      stagingList.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action="remove-pending"]');
+        if (!btn) return;
+        const id = btn.getAttribute('data-id');
+        const item = state.items.find((it) => it.id === id);
+        if (item) {
+          if (item.originalUrl) URL.revokeObjectURL(item.originalUrl);
+          if (item.compressedUrl) URL.revokeObjectURL(item.compressedUrl);
+          state.items = state.items.filter((it) => it.id !== id);
+          render();
+        }
+      });
+
+      // Recompress already-compressed items when settings change (leave pending items in staging)
+      let recompressTimer = null;
+      function scheduleRecompress() {
+        const activeItems = state.items.filter((it) => it.status === 'done' || it.status === 'error');
+        if (activeItems.length === 0) return;
+        clearTimeout(recompressTimer);
+        recompressTimer = setTimeout(async () => {
+          activeItems.forEach((it) => (it.status = 'processing'));
+          render();
+          await Promise.all(activeItems.map((it) => compressImageItem(it)));
+          render();
+        }, 120);
+      }
+
+      // Generate procedural sample image(s) so users can test immediately
+      function createSampleBlob(variant) {
+        return new Promise((resolve) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = variant === 1 ? 1600 : variant === 2 ? 1400 : 1200;
+          canvas.height = variant === 1 ? 1000 : variant === 2 ? 900 : 800;
+          const ctx = canvas.getContext('2d');
+
+          // Rich multi-stop sky/backdrop gradient
+          const palettes = [
+            ['#1e1b4b', '#4f46e5', '#06b6d4', '#fde68a'],
+            ['#0f172a', '#be185d', '#f97316', '#fef08a'],
+            ['#064e3b', '#059669', '#34d399', '#ecfdf5'],
+          ];
+          const pal = palettes[(variant - 1) % palettes.length];
+          const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+          grad.addColorStop(0, pal[0]);
+          grad.addColorStop(0.45, pal[1]);
+          grad.addColorStop(0.8, pal[2]);
+          grad.addColorStop(1, pal[3]);
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // Layered geometric hills / waves for fine texture & compression testing
+          for (let layer = 0; layer < 5; layer++) {
+            ctx.beginPath();
+            const baseY = canvas.height * (0.42 + layer * 0.11);
+            ctx.moveTo(0, canvas.height);
+            for (let x = 0; x <= canvas.width; x += 20) {
+              const y =
+                baseY +
+                Math.sin(x * 0.004 + layer * 1.4 + variant) * 45 +
+                Math.cos(x * 0.011 - layer) * 20;
+              ctx.lineTo(x, y);
+            }
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.closePath();
+            ctx.fillStyle = `rgba(15, 23, 42, ${0.12 + layer * 0.14})`;
+            ctx.fill();
+          }
+
+          // Glowing sun / orb
+          ctx.beginPath();
+          ctx.arc(canvas.width * 0.72, canvas.height * 0.28, 110, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(canvas.width * 0.72, canvas.height * 0.28, 68, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+          ctx.fill();
+
+          // Subtle fine grain dots to make PNG large and show real compression savings
+          for (let i = 0; i < 4500; i++) {
+            const x = (i * 7919) % canvas.width;
+            const y = (i * 6271) % canvas.height;
+            ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+            ctx.fillRect(x, y, 2, 2);
+          }
+
+          canvas.toBlob((blob) => {
+            const names = ['alpine-horizon.png', 'sunset-dunes.png', 'emerald-valley.png'];
+            const file = new File([blob], names[(variant - 1) % names.length], { type: 'image/png' });
+            resolve(file);
+          }, 'image/png');
+        });
+      }
+
+      sampleSingleBtn.addEventListener('click', async () => {
+        const file = await createSampleBlob(1);
+        handleFiles([file]);
+      });
+
+      sampleBatchBtn.addEventListener('click', async () => {
+        const files = await Promise.all([createSampleBlob(1), createSampleBlob(2), createSampleBlob(3)]);
+        handleFiles(files);
+      });
+
+      // Render UI
+      function render() {
+        const hasItems = state.items.length > 0;
+        const pendingItems = state.items.filter((it) => it.status === 'pending');
+        const processingItems = state.items.filter((it) => it.status === 'processing');
+        const stagingItems = state.items.filter((it) => it.status === 'pending' || it.status === 'processing');
+        const resultItems = state.items.filter((it) => it.status === 'done' || it.status === 'error');
+
+        stagingSection.classList.toggle('hidden', stagingItems.length === 0);
+        resultsSection.classList.toggle('hidden', resultItems.length === 0);
+        heroHeader.classList.toggle('hidden', hasItems);
+        dropzone.classList.toggle('p-10', !hasItems);
+        dropzone.classList.toggle('sm:p-16', !hasItems);
+        dropzone.classList.toggle('p-6', hasItems);
+
+        if (!hasItems) {
+          stagingList.innerHTML = '';
+          fileList.innerHTML = '';
+          return;
+        }
+
+        // Render Temporary Uploaded Staging Area
+        if (stagingItems.length > 0) {
+          const isProcessing = processingItems.length > 0 && pendingItems.length === 0;
+          stagingCountBadge.textContent = isProcessing
+            ? `Compressing ${processingItems.length}…`
+            : `${pendingItems.length} ready`;
+          startCompressBtn.disabled = pendingItems.length === 0;
+          startBtnLabel.textContent = isProcessing ? 'Compressing…' : 'Start';
+
+          stagingList.innerHTML = stagingItems
+            .map((item) => {
+              const isProc = item.status === 'processing';
+              return `
+                <div class="group relative rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 p-2 flex flex-col gap-2">
+                  <div class="relative aspect-[4/3] rounded-lg overflow-hidden checkerboard border border-slate-200/70 dark:border-slate-700">
+                    <img src="${item.originalUrl}" alt="${escapeHtml(item.name)}" class="w-full h-full object-cover" />
+                    <button type="button" data-action="remove-pending" data-id="${item.id}" aria-label="Remove uploaded image"
+                      class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-900/70 hover:bg-rose-600 text-white flex items-center justify-center transition-colors">
+                      <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
+                    ${
+                      isProc
+                        ? `<div class="absolute inset-0 bg-slate-900/50 backdrop-blur-[1px] flex items-center justify-center">
+                             <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-600 text-white">Compressing…</span>
+                           </div>`
+                        : ''
+                    }
+                  </div>
+                  <div class="min-w-0 px-0.5">
+                    <p class="text-xs font-medium text-slate-800 dark:text-slate-100 truncate">${escapeHtml(item.name)}</p>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                      ${formatBytes(item.originalSize)}${item.origW ? ` · ${item.origW}×${item.origH}` : ''}
+                    </p>
+                  </div>
+                </div>
+              `;
+            })
+            .join('');
+        } else {
+          stagingList.innerHTML = '';
+        }
+
+        if (resultItems.length === 0) {
+          fileList.innerHTML = '';
+          if (window.lucide) lucide.createIcons();
+          return;
+        }
+
+        // Totals (for compressed results)
+        let totalOrig = 0;
+        let totalComp = 0;
+        let readyCount = 0;
+        resultItems.forEach((it) => {
+          totalOrig += it.originalSize;
+          if (it.status === 'done') {
+            totalComp += it.compressedSize;
+            readyCount++;
+          } else {
+            totalComp += it.originalSize;
+          }
+        });
+
+        const saved = Math.max(0, totalOrig - totalComp);
+        const pct = totalOrig > 0 ? Math.round(((totalOrig - totalComp) / totalOrig) * 100) : 0;
+
+        totalSavingsText.textContent = saved > 0 ? formatBytes(saved) : '0 B';
+        totalSavingsPct.textContent = pct >= 0 ? `-${pct}%` : `+${Math.abs(pct)}%`;
+        totalSavingsPct.className =
+          pct > 0
+            ? 'text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300'
+            : 'text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300';
+
+        fileCountText.textContent = `${resultItems.length} image${resultItems.length === 1 ? '' : 's'}`;
+        sizeTransitionText.textContent = `${formatBytes(totalOrig)} → ${formatBytes(totalComp)}`;
+        downloadAllBtn.disabled = readyCount === 0;
+        downloadAllLabel.textContent = resultItems.length === 1 ? 'Download Image' : 'Download All (.zip)';
+
+        // Render Cards
+        fileList.innerHTML = resultItems
+          .map((item) => {
+            const isDone = item.status === 'done';
+            const itemPct =
+              isDone && item.originalSize > 0
+                ? Math.round(((item.originalSize - item.compressedSize) / item.originalSize) * 100)
+                : 0;
+            const badgeClass =
+              itemPct > 0
+                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300'
+                : 'bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300';
+            const pctLabel = itemPct >= 0 ? `-${itemPct}%` : `+${Math.abs(itemPct)}%`;
+
+            return `
+              <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 shadow-sm">
+                <div class="flex items-center gap-3.5 min-w-0">
+                  <div class="w-14 h-14 rounded-xl overflow-hidden checkerboard border border-slate-200 dark:border-slate-700 shrink-0 flex items-center justify-center">
+                    <img src="${isDone ? item.compressedUrl : item.originalUrl}" alt="${escapeHtml(item.name)}" class="w-full h-full object-cover" />
+                  </div>
+                  <div class="min-w-0 space-y-1">
+                    <div class="flex items-center gap-2">
+                      <p class="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">${escapeHtml(item.name)}</p>
+                      <span class="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        ${mimeToLabel(item.outMime)}
+                      </span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                      ${
+                        isDone
+                          ? `<span>${formatBytes(item.originalSize)} → <strong class="text-emerald-600 dark:text-emerald-400">${formatBytes(item.compressedSize)}</strong></span>
+                             <span class="font-semibold px-1.5 py-0.5 rounded-md text-[11px] ${badgeClass}">${pctLabel}</span>
+                             <span class="text-slate-400 dark:text-slate-500">${item.compW}×${item.compH}</span>`
+                          : item.status === 'error'
+                          ? `<span class="text-rose-500 font-medium">Could not process image</span>`
+                          : `<span class="text-indigo-500 font-medium">Compressing…</span>`
+                      }
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 shrink-0">
+                  <button type="button" data-action="compare" data-id="${item.id}" ${!isDone ? 'disabled' : ''}
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors disabled:opacity-40">
+                    <i data-lucide="split-square-horizontal" class="w-3.5 h-3.5"></i>
+                    Compare
+                  </button>
+                  <button type="button" data-action="download" data-id="${item.id}" ${!isDone ? 'disabled' : ''}
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/70 text-indigo-700 dark:text-indigo-300 transition-colors disabled:opacity-40">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                    Save
+                  </button>
+                  <button type="button" data-action="remove" data-id="${item.id}" aria-label="Remove image"
+                    class="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                  </button>
+                </div>
+              </div>
+            `;
+          })
+          .join('');
+
+        if (window.lucide) {
+          lucide.createIcons();
+        }
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      // Download single file
+      function downloadItem(item) {
+        if (!item || !item.compressedUrl) return;
+        const a = document.createElement('a');
+        a.href = item.compressedUrl;
+        a.download = getOutputFilename(item.name, item.outMime);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+
+      // Event Delegation for file list buttons
+      fileList.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const id = btn.getAttribute('data-id');
+        const action = btn.getAttribute('data-action');
+        const item = state.items.find((it) => it.id === id);
+        if (!item) return;
+
+        if (action === 'download') {
+          downloadItem(item);
+        } else if (action === 'compare') {
+          openCompareModal(item);
+        } else if (action === 'remove') {
+          if (item.originalUrl) URL.revokeObjectURL(item.originalUrl);
+          if (item.compressedUrl) URL.revokeObjectURL(item.compressedUrl);
+          state.items = state.items.filter((it) => it.id !== id);
+          render();
+        }
+      });
+
+      // Dropzone & File Input Events
+      dropzone.addEventListener('click', () => fileInput.click());
+      dropzone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          fileInput.click();
+        }
+      });
+      addMoreBtn.addEventListener('click', () => fileInput.click());
+
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          handleFiles(e.target.files);
+          fileInput.value = '';
+        }
+      });
+
+      ['dragenter', 'dragover'].forEach((evtName) => {
+        dropzone.addEventListener(evtName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropzone.classList.add('border-indigo-500', 'bg-indigo-50/60', 'dark:bg-indigo-950/30');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach((evtName) => {
+        dropzone.addEventListener(evtName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropzone.classList.remove('border-indigo-500', 'bg-indigo-50/60', 'dark:bg-indigo-950/30');
+        });
+      });
+
+      dropzone.addEventListener('drop', (e) => {
+        if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+          handleFiles(e.dataTransfer.files);
+        }
+      });
+
+      // Paste from clipboard
+      window.addEventListener('paste', (e) => {
+        const items = e.clipboardData && e.clipboardData.items;
+        if (!items) return;
+        const files = [];
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type.indexOf('image') !== -1) {
+            const f = items[i].getAsFile();
+            if (f) files.push(f);
+          }
+        }
+        if (files.length > 0) {
+          handleFiles(files);
+        }
+      });
+
+      // Controls Listeners
+      function updatePresetButtons(val) {
+        document.querySelectorAll('.preset-btn').forEach((btn) => {
+          const p = Number(btn.getAttribute('data-preset'));
+          if (p === val) {
+            btn.className = 'preset-btn flex-1 text-xs py-1.5 rounded-lg font-medium bg-indigo-600 text-white transition-colors';
+          } else {
+            btn.className = 'preset-btn flex-1 text-xs py-1.5 rounded-lg font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors';
+          }
+        });
+      }
+
+      qualityRange.addEventListener('input', (e) => {
+        state.quality = Number(e.target.value);
+        qualityValue.textContent = `${state.quality}%`;
+        updatePresetButtons(state.quality);
+        scheduleRecompress();
+      });
+
+      document.querySelectorAll('.preset-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const val = Number(btn.getAttribute('data-preset'));
+          state.quality = val;
+          qualityRange.value = val;
+          qualityValue.textContent = `${val}%`;
+          updatePresetButtons(val);
+          scheduleRecompress();
+        });
+      });
+
+      formatSelect.addEventListener('change', (e) => {
+        state.format = e.target.value;
+        scheduleRecompress();
+      });
+
+      resizeSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val === 'custom') {
+          customWidthWrap.classList.remove('hidden');
+          resizeHint.classList.add('hidden');
+          const cw = Number(customWidthInput.value);
+          state.maxWidth = cw >= 50 ? cw : 0;
+        } else {
+          customWidthWrap.classList.add('hidden');
+          resizeHint.classList.remove('hidden');
+          state.maxWidth = Number(val);
+        }
+        scheduleRecompress();
+      });
+
+      customWidthInput.addEventListener('input', (e) => {
+        const cw = Number(e.target.value);
+        state.maxWidth = cw >= 50 ? cw : 0;
+        scheduleRecompress();
+      });
+
+      // Clear All
+      clearAllBtn.addEventListener('click', () => {
+        state.items.forEach((it) => {
+          if (it.originalUrl) URL.revokeObjectURL(it.originalUrl);
+          if (it.compressedUrl) URL.revokeObjectURL(it.compressedUrl);
+        });
+        state.items = [];
+        render();
+        showToast('Cleared all images');
+      });
+
+      // Download All (ZIP or single)
+      downloadAllBtn.addEventListener('click', async () => {
+        const doneItems = state.items.filter((it) => it.status === 'done' && it.compressedBlob);
+        if (doneItems.length === 0) return;
+
+        if (doneItems.length === 1) {
+          downloadItem(doneItems[0]);
+          return;
+        }
+
+        if (typeof JSZip === 'undefined') {
+          doneItems.forEach((it) => downloadItem(it));
+          return;
+        }
+
+        downloadAllBtn.disabled = true;
+        downloadAllLabel.textContent = 'Creating ZIP…';
+        try {
+          const zip = new JSZip();
+          const usedNames = new Set();
+          doneItems.forEach((it) => {
+            let fname = getOutputFilename(it.name, it.outMime);
+            let counter = 1;
+            while (usedNames.has(fname)) {
+              const ext = mimeToExt(it.outMime);
+              const base = it.name.replace(/\.[^/.]+$/, '');
+              fname = `${base}-compressed-${counter}.${ext}`;
+              counter++;
+            }
+            usedNames.add(fname);
+            zip.file(fname, it.compressedBlob);
+          });
+          const content = await zip.generateAsync({ type: 'blob' });
+          const url = URL.createObjectURL(content);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'compressed-images.zip';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 3000);
+          showToast('Downloaded compressed-images.zip');
+        } catch (err) {
+          showToast('ZIP failed; downloading individually');
+          doneItems.forEach((it) => downloadItem(it));
+        } finally {
+          downloadAllBtn.disabled = false;
+          downloadAllLabel.textContent = 'Download All (.zip)';
+        }
+      });
+
+      // Compare Modal Logic
+      function setCompareSlider(pct) {
+        const clamped = Math.max(2, Math.min(98, pct));
+        compareBeforeWrap.style.clipPath = `inset(0 ${100 - clamped}% 0 0)`;
+        compareDivider.style.left = `${clamped}%`;
+      }
+
+      function openCompareModal(item) {
+        state.comparingId = item.id;
+        compareTitle.textContent = item.name;
+        const pct = item.originalSize > 0
+          ? Math.round(((item.originalSize - item.compressedSize) / item.originalSize) * 100)
+          : 0;
+        compareMeta.textContent = `${item.origW}×${item.origH} → ${item.compW}×${item.compH} · ${mimeToLabel(item.outMime)} (${pct >= 0 ? '-' + pct : '+' + Math.abs(pct)}%)`;
+        compareOrigSize.textContent = formatBytes(item.originalSize);
+        compareCompSize.textContent = formatBytes(item.compressedSize);
+        compareBeforeImg.src = item.originalUrl;
+        compareAfterImg.src = item.compressedUrl;
+        setCompareSlider(50);
+        compareModal.classList.remove('hidden');
+        if (window.lucide) lucide.createIcons();
+      }
+
+      function closeCompareModal() {
+        compareModal.classList.add('hidden');
+        state.comparingId = null;
+      }
+
+      closeCompareBtn.addEventListener('click', closeCompareModal);
+      compareModal.addEventListener('click', (e) => {
+        if (e.target === compareModal) closeCompareModal();
+      });
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !compareModal.classList.contains('hidden')) {
+          closeCompareModal();
+        }
+      });
+
+      compareDownloadBtn.addEventListener('click', () => {
+        const item = state.items.find((it) => it.id === state.comparingId);
+        if (item) downloadItem(item);
+      });
+
+      // Dragging the split slider
+      let isDraggingSlider = false;
+      function updateSliderFromEvent(clientX) {
+        const rect = compareStage.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        const pct = ((clientX - rect.left) / rect.width) * 100;
+        setCompareSlider(pct);
+      }
+
+      compareStage.addEventListener('pointerdown', (e) => {
+        isDraggingSlider = true;
+        compareStage.setPointerCapture(e.pointerId);
+        updateSliderFromEvent(e.clientX);
+      });
+      compareStage.addEventListener('pointermove', (e) => {
+        if (!isDraggingSlider) return;
+        updateSliderFromEvent(e.clientX);
+      });
+      compareStage.addEventListener('pointerup', () => {
+        isDraggingSlider = false;
+      });
+      compareStage.addEventListener('pointercancel', () => {
+        isDraggingSlider = false;
+      });
+
+      // Init Icons
+      if (window.lucide) {
+        lucide.createIcons();
+      }
+    })();
+  </script>
+</body>
+</html>
